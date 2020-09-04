@@ -35,7 +35,7 @@ class Group(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String)
 
-    lectures = relationship('lectures', secondary=association_table)
+    lectures = relationship('Lecture', secondary=association_table)
 
 
 class Listener(Base):
