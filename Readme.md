@@ -1,7 +1,7 @@
 # Lecture Notificator
 
 ## Description
-I generally miss all my lectures, so I decided to write a Telegram bot to remind my of them.
+I generally miss all my lectures, so I decided to write a Telegram bot to remind me of them.
 
 ## Features
   * TODO: Registering yourself as a member of a group
