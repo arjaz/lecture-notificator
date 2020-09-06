@@ -1,43 +1,39 @@
-from telegram.ext import Updater, InlineQueryHandler, CommandHandler
-import requests
-import re
+import os
 import logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO)
 
+from functools import partial
+from telegram.ext import Updater, CommandHandler
 
-def start(update, context):
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=
-        "I will provide notification before your lectures. Feel free to contact @arjaz for any help."
-    )
-
-
-def bop_command(update, context):
-    def get_url():
-        contents = requests.get('https://random.dog/woof.json').json()
-        url = contents['url']
-        return url
-
-    url = get_url()
-    chat_id = update.message.chat_id
-    context.bot.send_photo(chat_id=update.message.chat_id, photo=url)
+from db import Database
+from bot import start, subscribe, unsubscribe
 
 
 def main():
     '''Start the bot'''
+
+    # Handle the database
+    database = Database()
+
     # Create the Updater and pass it your bot's token.
-    updater = Updater('1265390639:AAHrUXDmTx-So3HJlM_s8ZL_zlcoFAiaErY',
-                      use_context=True)
+    token = os.environ.get('TELEGRAM_TOKEN')
+    updater = Updater(token, use_context=True)
 
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
 
     # Add commands handling
-    dp.add_handler(CommandHandler('start', start))
-    dp.add_handler(CommandHandler('bop', bop_command))
+    callbacks = [
+        ('start', start),
+        ('subscribe', subscribe),
+        ('unsubscribe', unsubscribe),
+        ('stop', unsubscribe),
+    ]
+    for callback in callbacks:
+        (name, handler) = callback
+        handler_with_database = partial(handler, database)
+        dp.add_handler(CommandHandler(name, handler_with_database))
+
+    logging.info('Starting the bot...')
 
     # Start the Bot
     updater.start_polling()
@@ -47,6 +43,14 @@ def main():
     # start_polling() is non-blocking and will stop the bot gracefully.
     updater.idle()
 
+    logging.info('Finishing the bot...')
+
+    database.session.commit()
+
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO)
+
     main()
