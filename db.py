@@ -44,6 +44,7 @@ class Listener(Base):
 
     # That should be used as a telegram chat id as well
     id = Column(Integer, primary_key=True)
+    username = Column(String)
 
     group_id = Column(Integer, ForeignKey('groups.id'))
 
