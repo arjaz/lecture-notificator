@@ -1,3 +1,4 @@
+import os
 import logging
 
 from functools import partial
@@ -14,8 +15,8 @@ def main():
     database = Database()
 
     # Create the Updater and pass it your bot's token.
-    updater = Updater('1265390639:AAHrUXDmTx-So3HJlM_s8ZL_zlcoFAiaErY',
-                      use_context=True)
+    token = os.environ.get('TELEGRAM_TOKEN')
+    updater = Updater(token, use_context=True)
 
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
