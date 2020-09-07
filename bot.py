@@ -24,7 +24,6 @@ def start(database, update, context):
         'Feel free to contact @arjaz for any help.')
 
 
-# TODO: add help messages
 def help(database, update, context):
     '''Gives detailed information about the bot and its commands'''
 
