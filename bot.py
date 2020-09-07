@@ -1,46 +1,9 @@
 import logging
 import sqlalchemy
 import time
+import asyncio
 
-from db import Listener, Group
-
-
-# TODO: come up with a way to get the notifications be persistent
-def check_notify(context):
-    job = context.job
-
-    database = context.job.context['database']
-    listener = context.job.context['listener']
-
-    t = time.time()
-
-    if 'last_time' not in job.__dict__:
-        job.last_time = t
-    elif t - job.last_time < (60 * 60):
-        return
-
-    # Get current date and time
-    current_time = time.localtime(t)
-
-    # Check if the listener is subscribed to a group
-    if listener.group_id is None:
-        return
-
-    group = database.session.query(Group).get(listener.group_id)
-
-    for lecture in group.lectures:
-        current_day = current_time.tm_wday
-        current_minute = current_time.tm_hour * 60 + current_time.tm_min
-        # TODO: check the current week against the lecture's one
-        current_week = 1
-
-        if (current_day == lecture.day and current_minute + 10 == lecture.time
-                and current_week == lecture.week):
-            context.bot.send_message(
-                chat_id=context.job.context['chat_id'],
-                text=f'Your lecture "{lecture.name}" will start in 10 minutes.'
-                'Be ready.')
-            logging.info(f'Notifying {listener.username} about {lecture.name}')
+from db import Listener, Group, Database
 
 
 def start(database, update, context):
@@ -73,6 +36,7 @@ def unsubscribe(database, update, context):
     try:
         listener = database.session.query(Listener).get(
             update.effective_chat.id)
+        logging.info(f'Unsubscribing {listener.username} from his group')
     except sqlalchemy.orm.exc.NoResultFound:
         logging.info('No listener found')
         return
@@ -120,16 +84,35 @@ def subscribe(database, update, context):
         old_job = context.chat_data['job']
         old_job.schedule_removal()
 
-    WAIT_TIME = 30
-    new_job = context.job_queue.run_repeating(check_notify,
-                                              context={
-                                                  'database':
-                                                  database,
-                                                  'listener':
-                                                  listener,
-                                                  'chat_id':
-                                                  update.effective_chat.id
-                                              },
-                                              interval=WAIT_TIME,
-                                              first=0)
-    context.chat_data['job'] = new_job
+
+async def check_notify_all(updater):
+    while True:
+        database = Database()
+
+        t = time.time()
+        current_time = time.localtime(t)
+
+        for listener in database.session.query(Listener).filter(
+                Listener.group_id is not None):
+            group = database.session.query(Group).get(listener.group_id)
+
+            for lecture in group.lectures:
+                current_day = current_time.tm_wday
+                current_minute = current_time.tm_hour * 60 + current_time.tm_min
+                # TODO: check the current week against the lecture's one
+                current_week = 1
+
+                if (True or current_day == lecture.day
+                        and current_minute + 10 == lecture.time
+                        and current_week == lecture.week):
+                    updater.bot.send_message(
+                        chat_id=listener.id,
+                        text=f'Your lecture "{lecture.name}" '
+                        'will start in 10 minutes. '
+                        'Be ready.')
+                    logging.info(
+                        f'Notifying {listener.username} about {lecture.name}')
+                    logging.info(f'{listener.group_id}, {group.name}')
+        # Wait for some time before the next check
+        WAIT_TIME = 5
+        await asyncio.sleep(WAIT_TIME)
