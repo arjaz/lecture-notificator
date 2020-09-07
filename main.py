@@ -6,7 +6,7 @@ from functools import partial
 from telegram.ext import Updater, CommandHandler
 
 from db import Database
-from bot import start, subscribe, unsubscribe, check_notify_all
+from bot import start, help, subscribe, unsubscribe, check_notify_all
 
 
 async def gatherer(database, updater):
@@ -44,6 +44,7 @@ def main():
     # Add commands handling
     callbacks = [
         ('start', start),
+        ('help', help),
         ('subscribe', subscribe),
         ('unsubscribe', unsubscribe),
         ('stop', unsubscribe),

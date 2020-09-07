@@ -20,14 +20,18 @@ def start(database, update, context):
         pass
 
     update.message.reply_text(
-        'I will provide notification before your lectures.'
+        'I will provide notification before your lectures. '
         'Feel free to contact @arjaz for any help.')
 
 
 # TODO: add help messages
 def help(database, update, context):
     '''Gives detailed information about the bot and its commands'''
-    pass
+
+    update.message.reply_text('/start - register yourself in the database\n'
+                              '/subscribe <group> - subscribe to a group\n'
+                              '/unsubscribe - unsubscribe from your group\n'
+                              '/stop - unsubscribe from your group')
 
 
 def unsubscribe(database, update, context):
@@ -102,7 +106,7 @@ async def check_notify_all(updater):
                 # TODO: check the current week against the lecture's one
                 current_week = 1
 
-                if (True or current_day == lecture.day
+                if (current_day == lecture.day
                         and current_minute + 10 == lecture.time
                         and current_week == lecture.week):
                     updater.bot.send_message(
@@ -112,7 +116,6 @@ async def check_notify_all(updater):
                         'Be ready.')
                     logging.info(
                         f'Notifying {listener.username} about {lecture.name}')
-                    logging.info(f'{listener.group_id}, {group.name}')
         # Wait for some time before the next check
         WAIT_TIME = 5
         await asyncio.sleep(WAIT_TIME)
