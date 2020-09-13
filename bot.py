@@ -10,14 +10,14 @@ def start(database, update, context):
     '''Print starting message'''
     logging.info(f'{update.effective_chat.username} started the bot')
 
-    listener = Listener(id=update.effective_chat.id,
-                        username=update.effective_chat.username)
-
-    try:
+    # Check if the listener already exists in the database
+    # and add him if not
+    if not database.session.query(sqlalchemy.exists().where(
+            Listener.id == update.effective_chat.id)).scalar():
+        listener = Listener(id=update.effective_chat.id,
+                            username=update.effective_chat.username)
         database.session.add(listener)
         database.session.commit()
-    except sqlalchemy.exc.IntegrityError:
-        pass
 
     update.message.reply_text(
         'I will provide notification before your lectures. '
