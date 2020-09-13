@@ -89,6 +89,28 @@ def subscribe(database, update, context):
 
 
 async def check_notify_all(updater):
+    def get_week(current_time):
+        current_year = current_time.tm_year
+
+        # The number of days since the start of the year
+        current_day = current_time.tm_yday
+
+        # The number of day passed at 1st September
+        sept_first = time.strptime(f'01 Sep {current_year}', '%d %b %Y')
+
+        first_monday = sept_first.tm_yday - sept_first.tm_wday
+
+        # The number of days in a year
+        end_day = 365
+
+        # Extract delta of current day and the first of september
+        delta = current_day - first_monday if current_day >= first_monday else (
+            current_day + (end_day - first_monday)) - first_monday
+
+        # mod by 14 and compare with 7
+        current_week = 1 if (delta % 14 + 1) >= 7 else 0
+        return current_week
+
     while True:
         database = Database()
 
@@ -102,8 +124,7 @@ async def check_notify_all(updater):
             for lecture in group.lectures:
                 current_day = current_time.tm_wday
                 current_minute = current_time.tm_hour * 60 + current_time.tm_min
-                # TODO: check the current week against the lecture's one
-                current_week = 1
+                current_week = get_week(current_time)
 
                 if (current_day == lecture.day
                         and current_minute + 10 == lecture.time
@@ -115,6 +136,7 @@ async def check_notify_all(updater):
                         'Be ready.')
                     logging.info(
                         f'Notifying {listener.username} about {lecture.name}')
+
         # Wait for some time before the next check
-        WAIT_TIME = 5
+        WAIT_TIME = 60
         await asyncio.sleep(WAIT_TIME)
