@@ -1,11 +1,31 @@
 import os
 import logging
+import asyncio
 
 from functools import partial
 from telegram.ext import Updater, CommandHandler
 
 from db import Database
-from bot import start, subscribe, unsubscribe
+from bot import start, help, subscribe, unsubscribe, check_notify_all
+
+
+async def gatherer(database, updater):
+    await asyncio.gather(check_notify_all(updater),
+                         start_bot(database, updater))
+
+
+async def start_bot(database, updater):
+    logging.info('Starting the bot...')
+
+    # Start the Bot
+    updater.start_polling()
+
+    # Run the bot until you press Ctrl-C or the process receives SIGINT,
+    # SIGTERM or SIGABRT. This should be used most of the time, since
+    # start_polling() is non-blocking and will stop the bot gracefully.
+    updater.idle()
+
+    logging.info('Finishing the bot...')
 
 
 def main():
@@ -24,6 +44,7 @@ def main():
     # Add commands handling
     callbacks = [
         ('start', start),
+        ('help', help),
         ('subscribe', subscribe),
         ('unsubscribe', unsubscribe),
         ('stop', unsubscribe),
@@ -33,17 +54,9 @@ def main():
         handler_with_database = partial(handler, database)
         dp.add_handler(CommandHandler(name, handler_with_database))
 
-    logging.info('Starting the bot...')
+    logging.info('Starting the notification async loop...')
 
-    # Start the Bot
-    updater.start_polling()
-
-    # Run the bot until you press Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
-    updater.idle()
-
-    logging.info('Finishing the bot...')
+    asyncio.run(gatherer(database, updater))
 
     database.session.commit()
 

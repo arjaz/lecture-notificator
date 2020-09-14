@@ -1,70 +1,36 @@
 import logging
 import sqlalchemy
 import time
+import asyncio
 
-from db import Listener, Group
-
-
-# TODO: come up with a way to get the notifications be persistent
-def check_notify(context):
-    job = context.job
-
-    database = context.job.context['database']
-    listener = context.job.context['listener']
-
-    t = time.time()
-
-    if 'last_time' not in job.__dict__:
-        job.last_time = t
-    elif t - job.last_time < (60 * 60):
-        return
-
-    # Get current date and time
-    current_time = time.localtime(t)
-
-    # Check if the listener is subscribed to a group
-    if listener.group_id is None:
-        return
-
-    group = database.session.query(Group).get(listener.group_id)
-
-    for lecture in group.lectures:
-        current_day = current_time.tm_wday
-        current_minute = current_time.tm_hour * 60 + current_time.tm_min
-        # TODO: check the current week against the lecture's one
-        current_week = 1
-
-        if (current_day == lecture.day and current_minute + 10 == lecture.time
-                and current_week == lecture.week):
-            context.bot.send_message(
-                chat_id=context.job.context['chat_id'],
-                text=f'Your lecture "{lecture.name}" will start in 10 minutes.'
-                'Be ready.')
-            logging.info(f'Notifying {listener.username} about {lecture.name}')
+from db import Listener, Group, Database
 
 
 def start(database, update, context):
     '''Print starting message'''
     logging.info(f'{update.effective_chat.username} started the bot')
 
-    listener = Listener(id=update.effective_chat.id,
-                        username=update.effective_chat.username)
-
-    try:
+    # Check if the listener already exists in the database
+    # and add him if not
+    if not database.session.query(sqlalchemy.exists().where(
+            Listener.id == update.effective_chat.id)).scalar():
+        listener = Listener(id=update.effective_chat.id,
+                            username=update.effective_chat.username)
         database.session.add(listener)
         database.session.commit()
-    except sqlalchemy.exc.IntegrityError:
-        pass
 
     update.message.reply_text(
-        'I will provide notification before your lectures.'
+        'I will provide notification before your lectures. '
         'Feel free to contact @arjaz for any help.')
 
 
-# TODO: add help messages
 def help(database, update, context):
     '''Gives detailed information about the bot and its commands'''
-    pass
+
+    update.message.reply_text('/start - register yourself in the database\n'
+                              '/subscribe <group> - subscribe to a group\n'
+                              '/unsubscribe - unsubscribe from your group\n'
+                              '/stop - unsubscribe from your group')
 
 
 def unsubscribe(database, update, context):
@@ -73,6 +39,7 @@ def unsubscribe(database, update, context):
     try:
         listener = database.session.query(Listener).get(
             update.effective_chat.id)
+        logging.info(f'Unsubscribing {listener.username} from his group')
     except sqlalchemy.orm.exc.NoResultFound:
         logging.info('No listener found')
         return
@@ -120,16 +87,56 @@ def subscribe(database, update, context):
         old_job = context.chat_data['job']
         old_job.schedule_removal()
 
-    WAIT_TIME = 30
-    new_job = context.job_queue.run_repeating(check_notify,
-                                              context={
-                                                  'database':
-                                                  database,
-                                                  'listener':
-                                                  listener,
-                                                  'chat_id':
-                                                  update.effective_chat.id
-                                              },
-                                              interval=WAIT_TIME,
-                                              first=0)
-    context.chat_data['job'] = new_job
+
+async def check_notify_all(updater):
+    def get_week(current_time):
+        current_year = current_time.tm_year
+
+        # The number of days since the start of the year
+        current_day = current_time.tm_yday
+
+        # The number of day passed at 1st September
+        sept_first = time.strptime(f'01 Sep {current_year}', '%d %b %Y')
+
+        first_monday = sept_first.tm_yday - sept_first.tm_wday
+
+        # The number of days in a year
+        end_day = 365
+
+        # Extract delta of current day and the first of september
+        delta = current_day - first_monday if current_day >= first_monday else (
+            current_day + (end_day - first_monday)) - first_monday
+
+        # mod by 14 and compare with 7
+        current_week = 1 if (delta % 14 + 1) >= 7 else 0
+        return current_week
+
+    while True:
+        database = Database()
+
+        t = time.time()
+        current_time = time.localtime(t)
+
+        for listener in database.session.query(Listener).filter(
+                Listener.group_id is not None):
+            group = database.session.query(Group).get(listener.group_id)
+
+            for lecture in group.lectures:
+                current_day = current_time.tm_wday
+                current_minute = current_time.tm_hour * 60 + current_time.tm_min
+                current_week = get_week(current_time)
+
+                if (current_day == lecture.day
+                        and current_minute + 10 == lecture.time
+                        and current_week == lecture.week):
+                    updater.bot.send_message(
+                        chat_id=listener.id,
+                        text=f'Your lecture "{lecture.name}" '
+                        'will start in 10 minutes. '
+                        'Be ready.')
+                    logging.info(
+                        f'Notifying {listener.username} about {lecture.name}')
+
+        # Wait for some time before the next check
+        WAIT_TIME = 60
+        await asyncio.sleep(WAIT_TIME)
